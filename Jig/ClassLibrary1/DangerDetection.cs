@@ -9,7 +9,6 @@ namespace jigPractice
     public class DangerDetection
     {
         private ObjectId _movingBlockID;
-        private double _dangerDistance;
         public List<BlockReference> blocks = new List<BlockReference>();
         public BlockReference movingBlock;
 
