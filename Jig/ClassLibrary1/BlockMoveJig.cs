@@ -6,6 +6,7 @@ using Autodesk.AutoCAD.GraphicsInterface;
 using NSVLib.Utilities;
 using System;
 using System.Collections.Generic;
+using Polyline = Autodesk.AutoCAD.DatabaseServices.Polyline;
 
 namespace jigPractice
 {
@@ -13,7 +14,7 @@ namespace jigPractice
     {
         private Point3d _position;
         BlockReference _block;
-        List<(BlockReference point, double distance)> points = new List<(BlockReference point, double distance)>();
+        List<(BlockReference point, double distance, string shape)> points = new List<(BlockReference point, double distance, string shape)>();
         List<BlockReference> blks = new List<BlockReference>();
         string info;
         MText text;
@@ -55,29 +56,42 @@ namespace jigPractice
         protected override bool WorldDraw(WorldDraw draw)
         {
             BlockReference block = _block;
-            BlockReference DBlk;
             block.Position = _position;
             draw.Geometry.Draw(block);
-
+            Circle c = new Circle();
+            Polyline square = new Polyline();
             if (points.Count > 0)
             {
-                // * TODO: memmory leaks
-                Circle c = new Circle
+                foreach (var p in points)
                 {
-                    ColorIndex = 1,
-                };
-                c.Center = _position;
-                draw.Geometry.Draw(c);
+                    if (p.shape == "Circle")
+                    {
+                        c.ColorIndex = 1;
+                        c.Radius = p.distance;
+                        c.Center = p.point.Position;
+                        draw.Geometry.Draw(c);
+                    }
+                    else
+                    {
+                        square = new Polyline();
+                        double d = p.distance;
+                        Point3d center = p.point.Position;
 
-                foreach (var bk in points)
-                {
-                    DBlk = bk.point;
-                    DataWriter(DBlk);
-                    c.Center = DBlk.Position;
-                    c.Radius = bk.distance;
-                    draw.Geometry.Draw(c);
+                        square.ColorIndex = 1;
+
+                        square.AddVertexAt(0, new Point2d(center.X - d, center.Y - d), 0, 0, 0);
+                        square.AddVertexAt(1, new Point2d(center.X + d, center.Y - d), 0, 0, 0);
+                        square.AddVertexAt(2, new Point2d(center.X + d, center.Y + d), 0, 0, 0);
+                        square.AddVertexAt(3, new Point2d(center.X - d, center.Y + d), 0, 0, 0);
+
+                        square.Closed = true;
+                        draw.Geometry.Draw(square);
+                    }
+                    DataWriter(p.point);
                     draw.Geometry.Draw(text);
                 }
+                text?.Dispose();
+                c?.Dispose();  
             }
             return true;
         }

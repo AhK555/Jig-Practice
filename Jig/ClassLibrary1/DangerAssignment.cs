@@ -5,10 +5,6 @@ using Autodesk.AutoCAD.Geometry;
 using NSVLib.Utilities;
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Security.Cryptography;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace ClassLibrary1
 {
@@ -16,13 +12,13 @@ namespace ClassLibrary1
     {
         public double zFactor;
         public double dist;
+        public string shape;
+        List<BlockReference> blocks = new List<BlockReference>();
         public List<BlockReference> AssignShit()
         {
             var doc = Application.DocumentManager.MdiActiveDocument;
             var db = doc.Database;
             var ed = doc.Editor;
-
-            List<BlockReference> blocks = new List<BlockReference>();
 
             PromptSelectionOptions options = new PromptSelectionOptions();
             options.MessageForAdding =
@@ -41,20 +37,19 @@ namespace ClassLibrary1
 
             foreach (SelectedObject sel in result.Value)
             {
-                BlockReference block = AssignRealShit(sel.ObjectId);
-                blocks.Add(block);
+                AssignRealShit(sel.ObjectId);
             }
 
             return blocks;
         }
-        public BlockReference AssignRealShit(ObjectId id)
+        public void AssignRealShit(ObjectId id)
         {
             var doc = Application.DocumentManager.MdiActiveDocument;
             var ed = doc.Editor;
             var db = doc.Database;
 
             using (Transaction tr = db.TransactionManager.StartTransaction())
-            {
+            { 
                 BlockReference blk =
                     tr.GetObject(id, OpenMode.ForWrite) as BlockReference;
                 if (blk == null)
@@ -62,16 +57,35 @@ namespace ClassLibrary1
 
                 getshit(blk, ed);
 
+                BlockTable bt =
+    tr.GetObject(db.BlockTableId, OpenMode.ForRead) as BlockTable;
+
+                BlockTableRecord modelSpace =
+                    tr.GetObject(
+                        bt[BlockTableRecord.ModelSpace],
+                        OpenMode.ForRead
+                    ) as BlockTableRecord;
+
                 double danger = Math.Sqrt(zFactor *  zFactor + dist * dist);
                 Dictionary<string, string> map = new Dictionary<string, string>();
                 map.Add("dist", dist.ToString());
                 map.Add("Zfactor", zFactor.ToString());
                 map.Add("Danger", danger.ToString());
-                XDataUtil.SetXdata(tr, blk, "aaa", map);
+                map.Add("Shape", shape);
 
+                foreach (ObjectId blkID in modelSpace)
+                {
+                    BlockReference similarBlocks = tr.GetObject(blkID, OpenMode.ForWrite) as BlockReference;
+                    if (similarBlocks == null)
+                        continue;
+
+                    if (similarBlocks.BlockTableRecord != blk.BlockTableRecord)
+                        continue;
+
+                    XDataUtil.SetXdata(tr, similarBlocks, "aaa", map);
+                    blocks.Add(similarBlocks);
+                }
                 tr.Commit();
-
-                return blk;
             }
         }
         private  void getshit(BlockReference bllk , Editor ed)
@@ -98,6 +112,17 @@ namespace ClassLibrary1
 
             if (zResults.Status != PromptStatus.OK)
                 throw new Exception("wrong");
+
+            PromptKeywordOptions shapeOptions = new PromptKeywordOptions("\nChoose danger shape [circle/Square] : ");
+            shapeOptions.Keywords.Add("Circle");
+            shapeOptions.Keywords.Add("Square");
+            shapeOptions.AllowNone = false;
+            bllk.Highlight();
+
+            PromptResult shapeResult = ed.GetKeywords(shapeOptions);
+            if (shapeResult.Status != PromptStatus.OK)
+                throw new Exception("wrong");
+            shape = shapeResult.StringResult;
             zFactor = zResults.Value;
             dist = distanceResult.Value;
         }
